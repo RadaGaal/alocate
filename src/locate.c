@@ -25,7 +25,7 @@ Author: Miloslav Trmac <mitr@redhat.com> */
 #include <inttypes.h>
 #include <limits.h>
 #include <locale.h>
-#include <regex.h>
+#include <tre/regex.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -90,6 +90,12 @@ static struct string_list conf_patterns; /* = { 0, }; */
 
 /* If conf_match_regexp, compiled patterns to search for */
 static regex_t *conf_regex_patterns;
+
+/* If conf_match_regexp, params to pass to regaexec() */
+static regaparams_t conf_regaparams;
+
+/* If conf_match_regexp, true if printing match cost before entry */
+static bool conf_show_cost;
 
 /* If !conf_match_regexp, true if the pattern contains no characters recognized
    by fnmatch () as special */
@@ -363,11 +369,15 @@ static void *uc_obstack_mark;
 
 /* Does STRING match one of conf_patterns? */
 static bool
-string_matches_pattern (const char *string)
+string_matches_pattern (const char *string, int *cost_out)
 {
   size_t i;
   wchar_t *wstring;
   bool matched, break_matching_on;
+  regamatch_t amatch;
+
+  if (conf_match_regexp != false)
+    memset(&amatch, 0, sizeof(amatch));
 
   if (conf_match_regexp == false && conf_ignore_case != false
       && conf_have_simple_pattern != false)
@@ -389,7 +399,11 @@ string_matches_pattern (const char *string)
   for (i = 0; i < conf_patterns.len; i++)
     {
       if (conf_match_regexp != false)
-	matched = regexec (conf_regex_patterns + i, string, 0, NULL, 0) == 0;
+	{
+	  matched = regaexec (conf_regex_patterns + i, string, &amatch,
+			      conf_regaparams, 0) == 0;
+	  *cost_out = amatch.cost;
+	}
       else
 	{
 	  if (conf_patterns_simple[i] != false)
@@ -418,6 +432,7 @@ static int
 handle_path (const char *path, int *visible)
 {
   const char *s, *matching;
+  int cost = 0;
 
   /* Statistics */
   if (conf_statistics != false)
@@ -431,7 +446,7 @@ handle_path (const char *path, int *visible)
     matching = s + 1;
   else
     matching = path;
-  if (!string_matches_pattern (matching))
+  if (!string_matches_pattern (matching, &cost))
     goto done;
   /* Visible? */
   if (*visible == -1)
@@ -448,6 +463,8 @@ handle_path (const char *path, int *visible)
   /* Output */
   if (conf_output_count == false)
     {
+      if (conf_show_cost != false)
+	printf ("%d:", cost);
       if (conf_output_quote != false)
 	write_quoted (path);
       else
@@ -620,6 +637,12 @@ help (void)
 	    "  -A, --all              only print entries that match all "
 	    "patterns\n"
 	    "  -b, --basename         match only the base name of path names\n"
+	    "      --cost-delete NUM  set cost of missing characters in "
+	    "approx. regexps\n"
+	    "      --cost-insert NUM  set cost of extra characters in "
+	    "approx. regexps\n"
+	    "      --cost-substitute NUM set cost of wrong characters in "
+	    "approx. regexps\n"
 	    "  -c, --count            only print number of found entries\n"
 	    "  -d, --database DBPATH  use DBPATH instead of default database "
 	    "(which is\n"
@@ -634,19 +657,23 @@ help (void)
 	    "patterns\n"
 	    "  -l, --limit, -n LIMIT  limit output (or counting) to LIMIT "
 	    "entries\n"
+	    "      --max-cost NUM     match entries having at most NUM cost "
+	    "in approx. regexps\n"
 	    "  -m, --mmap             ignored, for backward compatibility\n"
 	    "  -P, --nofollow, -H     don't follow trailing symbolic links "
 	    "when checking file\n"
 	    "                         existence\n"
 	    "  -0, --null             separate entries with NUL on output\n"
+	    "      --show-cost        prefix each entry with its cost for "
+	    "approx. regexps\n"
 	    "  -S, --statistics       don't search for entries, print "
 	    "statistics about each\n"
 	    "                         used database\n"
 	    "  -q, --quiet            report no error messages about reading "
 	    "databases\n"
-	    "  -r, --regexp REGEXP    search for basic regexp REGEXP instead "
-	    "of patterns\n"
-	    "      --regex            patterns are extended regexps\n"
+	    "  -r, --regexp REGEXP    search for approx. regexp REGEXP "
+	    "instead of patterns\n"
+	    "      --regex            patterns are approx. regexps\n"
 	    "  -s, --stdio            ignored, for backward compatibility\n"
 	    "  -V, --version          print version information\n"
 	    "  -w, --wholename        match whole path name "
@@ -665,17 +692,22 @@ parse_options (int argc, char *argv[])
       { "basename", no_argument, NULL, 'b' },
       { "count", no_argument, NULL, 'c' },
       { "database", required_argument, NULL, 'd' },
+      { "cost-delete", required_argument, NULL, 'D' },
+      { "cost-insert", required_argument, NULL, 'I' },
+      { "cost-substitute", required_argument, NULL, 'T' },
       { "existing", no_argument, NULL, 'e' },
       { "follow", no_argument, NULL, 'L' },
       { "help", no_argument, NULL, 'h' },
       { "ignore-case", no_argument, NULL, 'i' },
       { "limit", required_argument, NULL, 'l' },
+      { "max-cost", required_argument, NULL, 'M' },
       { "mmap", no_argument, NULL, 'm' },
       { "quiet", no_argument, NULL, 'q' },
       { "nofollow", no_argument, NULL, 'P' },
       { "null", no_argument, NULL, '0' },
       { "regexp", required_argument, NULL, 'r' },
       { "regex", no_argument, NULL, 'R' },
+      { "show-cost", no_argument, NULL, 'W' },
       { "statistics", no_argument, NULL, 'S' },
       { "stdio", no_argument, NULL, 's' },
       { "version", no_argument, NULL, 'V' },
@@ -708,6 +740,10 @@ parse_options (int argc, char *argv[])
 	  conf_match_all_patterns = true;
 	  break;
 
+	case 'D':
+	  conf_regaparams.cost_del = atoi(optarg);
+	  break;
+
 	case 'H': case 'P':
 	  if (got_follow != false)
 	    error (EXIT_FAILURE, 0,
@@ -715,6 +751,10 @@ parse_options (int argc, char *argv[])
 		   "nofollow");
 	  got_follow = true;
 	  conf_check_follow_trailing = false;
+	  break;
+
+	case 'I':
+	  conf_regaparams.cost_ins = atoi(optarg);
 	  break;
 
 	case 'L':
@@ -726,12 +766,20 @@ parse_options (int argc, char *argv[])
 	  conf_check_follow_trailing = true;
 	  break;
 
+	case 'M':
+	  conf_regaparams.max_cost = atoi(optarg);
+	  break;
+
 	case 'R':
 	  conf_match_regexp = true;
 	  break;
 
 	case 'S':
 	  conf_statistics = true;
+	  break;
+
+	case 'T':
+	  conf_regaparams.cost_subst = atoi(optarg);
 	  break;
 
 	case 'V':
@@ -742,6 +790,10 @@ parse_options (int argc, char *argv[])
 		  "This program is provided with NO WARRANTY, to the extent "
 		  "permitted by law."));
 	  exit (EXIT_SUCCESS);
+
+	case 'W':
+	  conf_show_cost = true;
+	  break;
 
 	case 'b':
 	  if (got_basename != false)
@@ -1017,6 +1069,8 @@ main (int argc, char *argv[])
     privileged_gid = grp->gr_gid;
   else
     privileged_gid = (gid_t)-1;
+  regaparams_default(&conf_regaparams);
+  conf_regaparams.max_cost = 0;
   parse_options (argc, argv);
   parse_arguments (argc, argv);
   finish_dbpath ();
