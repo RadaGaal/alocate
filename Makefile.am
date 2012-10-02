@@ -51,7 +51,7 @@ src_liblib_a_SOURCES = src/bind-mount.c src/bind-mount.h src/db.h \
 	src/lib.c src/lib.h
 
 src_locate_CPPFLAGS = $(AM_CPPFLAGS) $(COMMON_CPPFLAGS)
-src_locate_LDADD = src/liblib.a gnulib/lib/libgnu.a $(LIBINTL)
+src_locate_LDADD = src/liblib.a gnulib/lib/libgnu.a -ltre $(LIBINTL)
 
 src_updatedb_SOURCES = src/conf.c src/conf.h src/updatedb.c
 src_updatedb_CPPFLAGS = $(AM_CPPFLAGS) $(COMMON_CPPFLAGS) $(CONF_CPPFLAGS)
