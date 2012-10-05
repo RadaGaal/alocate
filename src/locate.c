@@ -25,7 +25,7 @@ Author: Miloslav Trmac <mitr@redhat.com> */
 #include <inttypes.h>
 #include <limits.h>
 #include <locale.h>
-#include <tre/regex.h>
+#include <tre/tre.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -91,7 +91,7 @@ static struct string_list conf_patterns; /* = { 0, }; */
 /* If conf_match_regexp, compiled patterns to search for */
 static regex_t *conf_regex_patterns;
 
-/* If conf_match_regexp, params to pass to regaexec() */
+/* If conf_match_regexp, params to pass to tre_regaexec() */
 static regaparams_t conf_regaparams;
 
 /* If conf_match_regexp, true if printing match cost before entry */
@@ -400,8 +400,8 @@ string_matches_pattern (const char *string, int *cost_out)
     {
       if (conf_match_regexp != false)
 	{
-	  matched = regaexec (conf_regex_patterns + i, string, &amatch,
-			      conf_regaparams, 0) == 0;
+	  matched = tre_regaexec (conf_regex_patterns + i, string, &amatch,
+			          conf_regaparams, 0) == 0;
 	  *cost_out = amatch.cost;
 	}
       else
@@ -902,16 +902,16 @@ parse_arguments (int argc, char *argv[])
 	{
 	  int err;
 
-	  err = regcomp (conf_regex_patterns + i, conf_patterns.entries[i],
-			 cflags);
+	  err = tre_regcomp (conf_regex_patterns + i, conf_patterns.entries[i],
+			     cflags);
 	  if (err != 0)
 	    {
 	      size_t size;
 	      char *msg;
 
-	      size = regerror (err, conf_regex_patterns + i, NULL, 0);
+	      size = tre_regerror (err, conf_regex_patterns + i, NULL, 0);
 	      msg = xmalloc (size);
-	      regerror (err, conf_regex_patterns + i, msg, size);
+	      tre_regerror (err, conf_regex_patterns + i, msg, size);
 	      error (EXIT_FAILURE, 0, _("invalid regexp `%s': %s"),
 		     conf_patterns.entries[i], msg);
 	    }
@@ -1069,7 +1069,7 @@ main (int argc, char *argv[])
     privileged_gid = grp->gr_gid;
   else
     privileged_gid = (gid_t)-1;
-  regaparams_default(&conf_regaparams);
+  tre_regaparams_default(&conf_regaparams);
   conf_regaparams.max_cost = 0;
   parse_options (argc, argv);
   parse_arguments (argc, argv);
