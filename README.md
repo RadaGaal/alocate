@@ -18,6 +18,9 @@ command line options to expose TRE's matching parameters.  This unfortunately
 means you have to use `locate --max-cost=x --regex thing` or something equally
 longwinded to see the effect.
 
+I created the upstream branch from mlocate's mercurial repo
+(<http://hg.fedorahosted.org/hg/mlocate>) using [git-hg][5].
+
 Building
 --------
 
@@ -73,3 +76,4 @@ Enjoy!
 [2]: http://linux.die.net/man/1/agrep
 [3]: https://fedorahosted.org/mlocate/
 [4]: http://laurikari.net/tre/
+[5]: https://github.com/cosmin/git-hg
