@@ -1,0 +1,4 @@
+* More closely match tre-agrep's command line options, for consistency's sake
+* Allow globs to approximately match - shouldn't have to use regexes to get
+  approximate matches; maybe accomplish by transcribing * into [^/]* or
+  something, alternately use an approximate globbing library if one exists
